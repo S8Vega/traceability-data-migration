@@ -9,7 +9,7 @@ Parameters:
     Default: thechaoscompany
 
 Resources:
-  TraceabilityDynamo:
+  TraceabilityTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Join [ '-', [traceability-table, !Ref companyName] ]
@@ -29,8 +29,68 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: date
         Enabled: true
-  BackupS3:
+
+  DataBackupBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
     Properties:
-      BucketName: !Join [ '-', [data-migration-bucket, !Ref companyName] ]
+      BucketName: !Join [ '-', [data-backup-bucket, !Ref companyName] ]
+  
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DataMigrationAccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - s3:PutObject
+                Resource:
+                  - !GetAtt TraceabilityTable.Arn
+                  - !GetAtt DataBackupBucket.Arn
+
+  ExporterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: exporter-function
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: nodejs14.x
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref TraceabilityTable
+          S3_BUCKET_NAME: !Ref DataBackupBucket
+      Code:
+        ZipFile: |
+          exports.handler = async function(event) {
+            console.log('this is a lambda')
+            return 'hello';
+          };
+
+  LambdaScheduledEvent:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: lambda-execution-event
+      ScheduleExpression: cron(0 14 * * ? *)  # Ejecutar a las 7 PM UTC
+      Targets:
+        - Arn: !GetAtt ExporterFunction.Arn
+          Id: ExecutionRule
+  LambdaNotificationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ExporterFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LambdaScheduledEvent.Arn
