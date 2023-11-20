@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Taller de AWS con CloudFormation - Migración de Información para Análisis en un Restaurante
+Description: AWS with CloudFormation Workshop - Data Migration for Restaurant Analytics
 
 Parameters:
   companyName:
@@ -57,7 +57,7 @@ Resources:
                   - s3:PutObject
                 Resource:
                   - !GetAtt TraceabilityTable.Arn
-                  - !GetAtt DataBackupBucket.Arn
+                  - !Join ['/', [!GetAtt DataBackupBucket.Arn, 'output.csv']]
 
   ExporterFunction:
     Type: AWS::Lambda::Function
