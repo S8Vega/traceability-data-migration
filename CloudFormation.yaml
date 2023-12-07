@@ -9,6 +9,21 @@ Parameters:
     Default: thechaoscompany
 
 Resources:
+  MyKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Clave de cifrado para S3
+      KeyPolicy:
+        Version: "2012-10-17"
+        Id: key-default-1
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - kms:*
+            Resource: "*"
+
   TraceabilityTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -29,17 +44,27 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: date
         Enabled: true
+      SSESpecification:
+        KMSMasterKeyId: !GetAtt MyKMSKey.Arn
+        SSEEnabled: true
+        SSEType: KMS
 
   DataBackupBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Join [ '-', [data-backup-bucket, !Ref companyName] ]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt MyKMSKey.Arn
+            BucketKeyEnabled: true
   
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -48,16 +73,18 @@ Resources:
       Policies:
         - PolicyName: DataMigrationAccessPolicy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - dynamodb:Scan
                   - dynamodb:GetItem
                   - s3:PutObject
+                  - kms:*
                 Resource:
                   - !GetAtt TraceabilityTable.Arn
                   - !Join ['/', [!GetAtt DataBackupBucket.Arn, 'output.csv']]
+                  - !GetAtt MyKMSKey.Arn
 
   ExporterFunction:
     Type: AWS::Lambda::Function
@@ -78,6 +105,7 @@ Resources:
             console.log('this is a lambda')
             return 'hello';
           };
+      KmsKeyArn: !GetAtt MyKMSKey.Arn
 
   LambdaScheduledEvent:
     Type: AWS::Events::Rule
