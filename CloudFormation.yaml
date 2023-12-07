@@ -13,16 +13,7 @@ Resources:
     Type: AWS::KMS::Key
     Properties:
       Description: Clave de cifrado para S3
-      KeyPolicy:
-        Version: "2012-10-17"
-        Id: key-default-1
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action:
-              - kms:*
-            Resource: "*"
+
 
   TraceabilityTable:
     Type: AWS::DynamoDB::Table
