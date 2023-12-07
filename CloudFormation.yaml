@@ -80,7 +80,8 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:GetItem
                   - s3:PutObject
-                  - kms:*
+                  - kms:GenerateDataKey
+                  - kms:Decrypt
                 Resource:
                   - !GetAtt TraceabilityTable.Arn
                   - !Join ['/', [!GetAtt DataBackupBucket.Arn, 'output.csv']]
